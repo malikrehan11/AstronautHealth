@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Telemetry API | AstroHealth AI</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+    <style>
+        .code-block {
+            background: #0d1117; color: #c9d1d9; padding: 15px; border-radius: 8px;
+            font-family: 'Courier New', monospace; font-size: 14px; overflow-x: auto;
+            border: 1px solid #30363d; margin-top: 10px; white-space: pre-wrap;
+        }
+        .endpoint {
+            background: var(--input-bg); padding: 10px; border-radius: 6px;
+            border-left: 4px solid var(--primary); font-family: monospace; font-weight: bold;
+            margin-bottom: 20px; display: inline-block;
+        }
+        .status-indicator {
+            display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+            background: #e74c3c; margin-right: 8px; transition: background 0.3s;
+        }
+        .status-indicator.online {
+            background: #2ecc71; box-shadow: 0 0 10px #2ecc71;
+        }
+        .terminal-output {
+            background: #000; color: #2ecc71; padding: 15px; border-radius: 8px;
+            font-family: 'Courier New', monospace; font-size: 13px; height: 200px;
+            overflow-y: auto; border: 1px solid #333; line-height: 1.5;
+        }
+    </style>
+</head>
+<body class="dash-body">
+    <header class="topbar">
+        <h1>🚀 AstroHealth AI — IoT Integration</h1>
+        <div>
+            <button id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()">🌙</button>
+            <span>👨‍🚀 {{ name }}</span> | 
+            <a href="{{ url_for('dashboard.astronaut_dashboard') }}">Back to Dashboard</a>
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
+        </div>
+    </header>
+
+    <nav aria-label="breadcrumb" style="padding: 10px 24px; font-size: 14px;">
+        <a href="/home" style="text-decoration: none;">Home</a> &rsaquo; 
+        <a href="{{ url_for('dashboard.astronaut_dashboard') }}" style="text-decoration: none;">Dashboard</a> &rsaquo; 
+        <span>IoT Integration</span>
+    </nav>
+
+    <main class="container">
+        <section class="card">
+            <h2>🛰️ Hardware Integration Status</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="font-size: 18px; font-weight: bold;">
+                    <span id="statusDot" class="status-indicator"></span>
+                    <span id="statusText">Spacesuit Sensor: Disconnected</span>
+                </div>
+                <button id="connectBtn" onclick="toggleSensorConnection()" style="background: var(--primary); color: var(--primary-contrast); border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s;">
+                    🔌 Connect to Spacesuit Sensor
+                </button>
+            </div>
+            
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 10px;">
+                When connected, the system emulates a real hardware device (like a Raspberry Pi) sending live telemetry via `POST /api/v1/sensor_ingest`.
+            </p>
+
+            <div class="terminal-output" id="terminalOutput">
+                [System] Awaiting hardware connection...
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>📄 API Documentation</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px; line-height: 1.6;">
+                This REST API allows external spacesuit biosensors to push telemetry directly to the AstroHealth AI database. 
+                Mission Control can monitor this data in real-time.
+            </p>
+
+            <div class="endpoint">POST /api/v1/sensor_ingest</div>
+            
+            <h3 style="margin-top: 20px; margin-bottom: 10px;">Expected Payload Format (JSON)</h3>
+            <div class="code-block">
+{
+  "heart_rate": 85,
+  "systolic_bp": 120,
+  "diastolic_bp": 80,
+  "spo2": 97,
+  "body_temp": 36.8,
+  "sleep_hours": 7.5,
+  "activity_minutes": 45,
+  "radiation_mSv": 0.5
+}
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Theme Logic
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.getElementById('themeToggle').innerText = savedTheme === 'dark' ? '☀️' : '🌙';
+        }
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            document.getElementById('themeToggle').innerText = newTheme === 'dark' ? '☀️' : '🌙';
+        }
+        initTheme();
+
+        // IoT Sensor Simulation Logic
+        let sensorInterval = null;
+        let packetCount = 0;
+
+        function logToTerminal(message, color = "#2ecc71") {
+            const terminal = document.getElementById('terminalOutput');
+            const time = new Date().toLocaleTimeString();
+            terminal.innerHTML += `<br><span style="color: ${color};">[${time}] ${message}</span>`;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function toggleSensorConnection() {
+            const btn = document.getElementById('connectBtn');
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+
+            if (sensorInterval) {
+                // Disconnect
+                clearInterval(sensorInterval);
+                sensorInterval = null;
+                btn.innerText = "🔌 Connect to Spacesuit Sensor";
+                btn.style.background = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+                dot.classList.remove('online');
+                text.innerText = "Spacesuit Sensor: Disconnected";
+                logToTerminal("Hardware device disconnected. Stream stopped.", "#e74c3c");
+            } else {
+                // Connect
+                btn.innerText = "⏹ Disconnect Sensor";
+                btn.style.background = "#e74c3c";
+                dot.classList.add('online');
+                text.innerText = "Spacesuit Sensor: Live Telemetry Active";
+                logToTerminal("Connection established. Hardware device authenticated.", "#2ecc71");
+                logToTerminal("Streaming biometric data at 1Hz...", "#8a9bb0");
+
+                // Start sending data every 2 seconds
+                sensorInterval = setInterval(async () => {
+                    packetCount++;
+                    
+                    // Generate realistic fluctuating data
+                    const isAnomaly = Math.random() < 0.15; // 15% chance of a spike
+                    const hr = isAnomaly ? Math.floor(Math.random() * 30) + 120 : Math.floor(Math.random() * 15) + 70;
+                    const spo2 = isAnomaly ? Math.floor(Math.random() * 5) + 85 : Math.floor(Math.random() * 3) + 96;
+                    const rad = (Math.random() * 1.5 + 0.1).toFixed(2);
+
+                    const payload = {
+                        heart_rate: hr,
+                        systolic_bp: Math.floor(Math.random() * 20) + 115,
+                        diastolic_bp: Math.floor(Math.random() * 15) + 75,
+                        spo2: spo2,
+                        body_temp: (Math.random() * 0.8 + 36.3).toFixed(1),
+                        sleep_hours: 7.5,
+                        activity_minutes: 45,
+                        radiation_mSv: parseFloat(rad)
+                    };
+
+                    logToTerminal(`TX Packet #${packetCount} -> POST /api/v1/sensor_ingest`, "#8a9bb0");
+
+                    try {
+                        const res = await fetch('/api/v1/sensor_ingest', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        
+                        if (res.ok) {
+                            const color = data.risk_status === 'Critical' ? '#e74c3c' : (data.risk_status === 'At Risk' ? '#f39c12' : '#2ecc71');
+                            logToTerminal(`RX 200 OK | Saved. AI Risk: ${data.risk_status}`, color);
+                        } else {
+                            logToTerminal(`RX ${res.status} ERROR | ${data.error}`, "#e74c3c");
+                        }
+                    } catch (err) {
+                        logToTerminal("RX 500 ERROR | Connection to server lost.", "#e74c3c");
+                    }
+                }, 2000);
+            }
+        }
+    </script>
+</body>
+</html>

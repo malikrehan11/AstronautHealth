@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Account | AstroHealth AI</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+    <style>
+        /* Force labels to be visible */
+        .input-label {
+            display: block;
+            font-size: 14px;
+            color: #a0aab5;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            text-align: left;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="auth-body">
+    <div class="auth-card" style="max-width: 450px;">
+        <h2>🚀 Create Account</h2>
+
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in msgs %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        {% endwith %}
+
+        <form method="POST">
+            <label class="input-label">Full Name</label>
+            <input name="name" placeholder="e.g. John Doe" required>
+
+            <label class="input-label">Email Address</label>
+            <input type="email" name="email" placeholder="e.g. john@astro.com" required>
+
+            <label class="input-label">Password</label>
+            <input type="password" name="password" placeholder="Create a password" required>
+
+            <label class="input-label">Role</label>
+            <select name="role">
+                <option value="astronaut">Astronaut</option>
+                <option value="mission_control">Mission Control (Admin)</option>
+            </select>
+
+            <label class="input-label">Mission Name</label>
+            <input name="mission" placeholder="e.g. Artemis-1" value="Artemis-1">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label class="input-label">Age</label>
+                    <input type="number" name="age" placeholder="30" value="30">
+                </div>
+                <div>
+                    <label class="input-label">Blood Group</label>
+                    <input name="blood_group" placeholder="O+" value="O+">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label class="input-label">Weight (kg)</label>
+                    <input type="number" step="0.1" name="weight" placeholder="70" value="70">
+                </div>
+                <div>
+                    <label class="input-label">Height (cm)</label>
+                    <input type="number" step="0.1" name="height" placeholder="175" value="175">
+                </div>
+            </div>
+
+            <button type="submit" style="margin-top: 25px;">Register</button>
+        </form>
+        
+        <p class="link" style="margin-top: 20px;">
+            Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a>
+        </p>
+    </div>
+</body>
+</html>

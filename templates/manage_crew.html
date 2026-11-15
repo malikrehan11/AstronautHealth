@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Crew | AstroHealth AI</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+    
+    <style>
+        .crew-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .crew-table th, .crew-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--card-border); }
+        .crew-table th { background: var(--table-header); color: var(--text-color); font-size: 13px; text-transform: uppercase; }
+        .crew-table td { color: var(--text-color); font-size: 14px; }
+        .btn-action { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; border: none; margin-right: 5px; }
+        .btn-edit { background: var(--primary); color: var(--primary-contrast); }
+        .btn-suspend { background: var(--at-risk); color: var(--at-risk-contrast); }
+        .btn-activate { background: var(--stable); color: var(--stable-contrast); }
+        .btn-delete { background: var(--critical); color: var(--critical-contrast); }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; align-items: center; justify-content: center; }
+        .modal-content { background: linear-gradient(145deg, var(--card-bg), var(--card-bg-alt)); padding: 30px; border-radius: 18px; width: 100%; max-width: 500px; border: 1px solid var(--card-border); border-top: 4px solid var(--primary); box-shadow: 0 18px 44px rgba(4,14,28,0.25); }
+        .modal-content h2 { margin-bottom: 20px; color: var(--text-color); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 13px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); }
+    </style>
+</head>
+<body class="dash-body">
+    <div class="dashboard-shell">
+        <aside class="dashboard-sidebar" aria-label="Mission Control navigation">
+            <div class="sidebar-brand">
+                <span class="sidebar-brand-mark" aria-hidden="true">✦</span>
+                <span><strong>ASTROHEALTH</strong><small>FLIGHT SYSTEMS</small></span>
+            </div>
+            <div class="sidebar-section-label">MISSION WORKSPACE</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" href="{{ url_for('dashboard.mission_control') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">⌂</span> Mission Control
+                </a>
+                <a class="sidebar-link active" href="{{ url_for('dashboard.manage_crew') }}" aria-current="page">
+                    <span class="sidebar-link-icon" aria-hidden="true">♙</span> Manage Crew
+                </a>
+                <a class="sidebar-link" href="{{ url_for('auth.logout') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">⇥</span> Sign out
+                </a>
+            </nav>
+            <div class="sidebar-session">
+                <div class="sidebar-session-label">✦ &nbsp; MISSION SESSION</div>
+                <div class="sidebar-profile">
+                    <span class="sidebar-avatar" aria-hidden="true">🛰️</span>
+                    <span>{{ name }}<small>MISSION CONTROL</small></span>
+                </div>
+            </div>
+        </aside>
+
+        <div class="dashboard-content">
+    <header class="topbar">
+        <h1>🛰️ Manage Crew</h1>
+        <div>
+            <button id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()">🌙</button>
+        </div>
+    </header>
+
+    <nav aria-label="breadcrumb" style="padding: 10px 24px; font-size: 14px;">
+        <span>Mission Control</span> &rsaquo; <span>Manage Crew</span>
+    </nav>
+
+    <main class="container">
+        <section class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>👨‍🚀 Astronaut Roster</h2>
+                <button class="btn-action" style="background: var(--stable); color: var(--stable-contrast);" onclick="openAddModal()">➕ Add New Astronaut</button>
+            </div>
+
+            <table class="crew-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Mission</th>
+                        <th>Status</th>
+                        <th>Vitals Profile</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in crew %}
+                    <tr>
+                        <td><b>{{ a.name }}</b></td>
+                        <td>{{ a.email }}</td>
+                        <td>{{ a.mission }}</td>
+                        <td>
+                            <span class="badge {{ a.status|lower }}">{{ a.status }}</span>
+                        </td>
+                        <td>{{ a.age }} yrs | {{ a.weight_kg }} kg | {{ a.blood_group }}</td>
+                        <td>
+                            <button class="btn-action btn-edit" onclick="openEditModal({{ a.id }}, '{{ a.name }}', '{{ a.mission }}', {{ a.age }}, {{ a.weight_kg }}, {{ a.height_cm }}, '{{ a.blood_group }}')">✏️ Edit</button>
+                            
+                            {% if a.status == 'Active' %}
+                                <button class="btn-action btn-suspend" onclick="toggleStatus({{ a.id }})">⏸️ Suspend</button>
+                            {% else %}
+                                <button class="btn-action btn-activate" onclick="toggleStatus({{ a.id }})">▶️ Activate</button>
+                            {% endif %}
+                            
+                            <button class="btn-action btn-delete" onclick="deleteAstronaut({{ a.id }})">🗑️ Delete</button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">No astronauts found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </main>
+        </div>
+    </div>
+
+    <!-- ADD MODAL -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <h2>➕ Add New Astronaut</h2>
+            <div class="form-group"><label>Full Name</label><input type="text" id="addName" placeholder="John Doe"></div>
+            <div class="form-group"><label>Email</label><input type="email" id="addEmail" placeholder="john@astro.com"></div>
+            <div class="form-group"><label>Password (Default: astro123)</label><input type="text" id="addPassword" value="astro123"></div>
+            <div class="form-group"><label>Mission</label><input type="text" id="addMission" value="Artemis-1"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group"><label>Age</label><input type="number" id="addAge" value="30"></div>
+                <div class="form-group"><label>Blood Group</label><input type="text" id="addBlood" value="O+"></div>
+                <div class="form-group"><label>Weight (kg)</label><input type="number" id="addWeight" value="70"></div>
+                <div class="form-group"><label>Height (cm)</label><input type="number" id="addHeight" value="175"></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-action" style="background: var(--primary); color: var(--primary-contrast); flex: 1; padding: 12px;" onclick="submitAdd()">Save Astronaut</button>
+                <button class="btn-action" style="background: #666; flex: 1; padding: 12px;" onclick="closeAddModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT MODAL -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h2>✏️ Edit Astronaut</h2>
+            <input type="hidden" id="editId">
+            <div class="form-group"><label>Full Name</label><input type="text" id="editName"></div>
+            <div class="form-group"><label>Mission</label><input type="text" id="editMission"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group"><label>Age</label><input type="number" id="editAge"></div>
+                <div class="form-group"><label>Blood Group</label><input type="text" id="editBlood"></div>
+                <div class="form-group"><label>Weight (kg)</label><input type="number" id="editWeight"></div>
+                <div class="form-group"><label>Height (cm)</label><input type="number" id="editHeight"></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-action" style="background: var(--primary); color: var(--primary-contrast); flex: 1; padding: 12px;" onclick="submitEdit()">Update Profile</button>
+                <button class="btn-action" style="background: #666; flex: 1; padding: 12px;" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme Logic
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.getElementById('themeToggle').innerText = savedTheme === 'dark' ? '☀️' : '🌙';
+        }
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            document.getElementById('themeToggle').innerText = newTheme === 'dark' ? '☀️' : '🌙';
+        }
+        initTheme();
+
+        // Modal Controls
+        function openAddModal() { document.getElementById('addModal').style.display = 'flex'; }
+        function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+        function openEditModal(id, name, mission, age, weight, height, blood) {
+            document.getElementById('editId').value = id;
+            document.getElementById('editName').value = name;
+            document.getElementById('editMission').value = mission;
+            document.getElementById('editAge').value = age;
+            document.getElementById('editWeight').value = weight;
+            document.getElementById('editHeight').value = height;
+            document.getElementById('editBlood').value = blood;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+        function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
+        // API Calls
+        async function submitAdd() {
+            const payload = {
+                name: document.getElementById('addName').value,
+                email: document.getElementById('addEmail').value,
+                password: document.getElementById('addPassword').value,
+                mission: document.getElementById('addMission').value,
+                age: document.getElementById('addAge').value,
+                blood_group: document.getElementById('addBlood').value,
+                weight: document.getElementById('addWeight').value,
+                height: document.getElementById('addHeight').value
+            };
+            const res = await fetch('/api/crew/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (res.ok) window.location.reload();
+            else alert("Error adding astronaut. Check the email (it may already exist).");
+        }
+
+        async function submitEdit() {
+            const id = document.getElementById('editId').value;
+            const payload = {
+                name: document.getElementById('editName').value,
+                mission: document.getElementById('editMission').value,
+                age: document.getElementById('editAge').value,
+                blood_group: document.getElementById('editBlood').value,
+                weight: document.getElementById('editWeight').value,
+                height: document.getElementById('editHeight').value
+            };
+            const res = await fetch(`/api/crew/update/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (res.ok) window.location.reload();
+            else alert("Error updating astronaut.");
+        }
+
+        async function toggleStatus(id) {
+            const res = await fetch(`/api/crew/toggle-status/${id}`, { method: 'POST' });
+            if (res.ok) window.location.reload();
+        }
+
+        async function deleteAstronaut(id) {
+            if (!confirm("⚠️ WARNING: This will permanently delete the astronaut and ALL their medical records. Are you sure?")) return;
+            const res = await fetch(`/api/crew/delete/${id}`, { method: 'DELETE' });
+            if (res.ok) window.location.reload();
+        }
+    </script>
+</body>
+</html>

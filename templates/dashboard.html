@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Telemetry | AstroHealth AI</title>
+    <meta name="description" content="Real-time physiological health monitoring dashboard for astronauts.">
+    <link rel="canonical" href="https://astrohealth.yourdomain.com/astronaut">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
+
+    <style>
+        .chat-widget-btn {
+            position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px;
+            background: var(--primary); color: var(--primary-contrast); border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 30px; cursor: pointer;
+            box-shadow: 0 4px 15px var(--primary-soft); z-index: 1000; transition: transform 0.2s;
+        }
+        .chat-widget-btn:hover { transform: scale(1.1); }
+        
+        .chat-box {
+            position: fixed; bottom: 100px; right: 30px; width: 350px; height: 450px;
+            background: linear-gradient(145deg, var(--card-bg), var(--card-bg-alt)); border: 1px solid var(--card-border);
+            border-radius: 18px; display: none; flex-direction: column; z-index: 1000;
+            box-shadow: 0 14px 34px rgba(4,14,28,0.22); overflow: hidden;
+        }
+        .chat-header { 
+            background: var(--primary); color: var(--primary-contrast); padding: 15px; 
+            font-weight: bold; display: flex; justify-content: space-between; 
+        }
+        .chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        .msg { padding: 10px 14px; border-radius: 12px; font-size: 14px; max-width: 80%; line-height: 1.4; }
+        .msg.user { background: var(--primary); color: var(--primary-contrast); align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg.ai { background: var(--input-bg); color: var(--text-color); align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid var(--card-border); }
+        
+        .chat-input-area { padding: 10px; border-top: 1px solid var(--card-border); display: flex; gap: 10px; }
+        .chat-input-area input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); outline: none; }
+        .chat-input-area button { background: var(--primary); color: var(--primary-contrast); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; }
+
+        @keyframes pulse-btn {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        @keyframes pulse-red {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="dash-body">
+    <!-- LOSS OF SIGNAL BANNER -->
+    <div id="losBanner" class="los-banner">
+        ⚠️ LOSS OF SIGNAL: Deep Space Communication Blackout. Data is being cached locally.
+    </div>
+
+    <div class="dashboard-shell">
+        <aside class="dashboard-sidebar" aria-label="Main navigation">
+            <div class="sidebar-brand">
+                <span class="sidebar-brand-mark" aria-hidden="true">✦</span>
+                <span><strong>ASTROHEALTH</strong><small>FLIGHT SYSTEMS</small></span>
+            </div>
+            <div class="sidebar-section-label">MISSION WORKSPACE</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link active" href="{{ url_for('dashboard.astronaut_dashboard') }}" aria-current="page">
+                    <span class="sidebar-link-icon" aria-hidden="true">⌂</span> Flight deck
+                </a>
+                <a class="sidebar-link" href="{{ url_for('dashboard.analytics') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">◷</span> Analytics
+                </a>
+                <a class="sidebar-link" href="{{ url_for('dashboard.developer_portal') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">⌘</span> Sensors
+                </a>
+                <a class="sidebar-link" href="{{ url_for('auth.logout') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">⇥</span> Sign out
+                </a>
+            </nav>
+            <div class="sidebar-session">
+                <div class="sidebar-session-label">✦ &nbsp; MISSION SESSION</div>
+                <div class="sidebar-profile">
+                    <span class="sidebar-avatar" aria-hidden="true">👨‍🚀</span>
+                    <span>{{ name }}<small>ASTRONAUT</small></span>
+                </div>
+            </div>
+        </aside>
+
+        <div class="dashboard-content">
+            <header class="topbar">
+                <h1>🚀 AstroHealth AI — Astronaut Dashboard</h1>
+                <div>
+                    <button id="losToggle" class="los-toggle" onclick="toggleLOS()">📡 Signal: ONLINE</button>
+                    <button id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌙</button>
+                    <span>👨‍🚀 {{ name }}</span>
+                    <a href="{{ url_for('auth.auto_admin') }}" style="color: var(--primary); font-weight: bold;">🛰️ Switch to Admin</a>
+                </div>
+            </header>
+
+            <nav aria-label="breadcrumb" style="padding: 10px 24px; font-size: 14px;">
+                <span>Telemetry Dashboard</span>
+            </nav>
+
+    <main class="container">
+        <h1 class="visually-hidden">Astronaut Live Telemetry Dashboard</h1>
+
+        <div id="emergencyButtonContainer" style="text-align: center; margin-bottom: 20px; display: none;">
+            <button onclick="declareEmergency()" style="background: #e74c3c; color: white; border: none; padding: 15px 40px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4); animation: pulse-btn 2s infinite;">
+                🚨 DECLARE MEDICAL EMERGENCY
+            </button>
+        </div>
+
+        <div style="text-align: right; margin-bottom: 20px;">
+            <button onclick="declareEmergency()" style="background: transparent; color: #e74c3c; border: 2px solid #e74c3c; padding: 8px 16px; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer;">
+                ⚠️ Manual Distress Signal
+            </button>
+        </div>
+
+        <section class="card">
+            <h2>👨‍🚀 Your Astronaut Profile</h2>
+            <p style="color: var(--text-muted); margin: -8px 0 18px;">
+                Create or update your profile details for this astronaut account.
+            </p>
+            <form id="astronautProfileForm" class="grid-form">
+                <label class="grid-field">
+                    <span class="grid-field-label">Full name</span>
+                    <input type="text" id="profileName" maxlength="100" value="{{ profile.name }}" required>
+                </label>
+                <label class="grid-field">
+                    <span class="grid-field-label">Age</span>
+                    <input type="number" id="profileAge" min="1" max="120" value="{{ profile.age or '' }}" required>
+                </label>
+                <label class="grid-field">
+                    <span class="grid-field-label">Blood group</span>
+                    <select id="profileBloodGroup" required>
+                        <option value="">Select blood group</option>
+                        {% for group in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] %}
+                        <option value="{{ group }}" {% if profile.blood_group == group %}selected{% endif %}>{{ group }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button type="submit">Save Profile</button>
+            </form>
+            <div id="profileMessage" role="status" style="margin-top: 12px;" aria-live="polite"></div>
+        </section>
+
+        <section class="card">
+            <h2>📊 Submit New Health Reading</h2>
+            <form id="healthForm" class="grid-form">
+                <input type="number" id="heart_rate" placeholder="Heart Rate (bpm)" required>
+                <input type="number" id="systolic_bp" placeholder="Systolic BP" required>
+                <input type="number" id="diastolic_bp" placeholder="Diastolic BP" required>
+                <input type="number" id="spo2" placeholder="SpO2 (%)" required>
+                <input type="number" step="0.1" id="body_temp" placeholder="Body Temp (°C)" required>
+                <input type="number" step="0.1" id="sleep_hours" placeholder="Sleep Hours" required>
+                <input type="number" id="activity_minutes" placeholder="Activity (min)" required>
+                <label class="grid-field">
+                    <span class="grid-field-label">Cosmic Radiation (mSv) · Default 0.5</span>
+                    <input type="number" step="0.01" id="radiation_mSv" value="0.5" aria-label="Cosmic Radiation in mSv (default 0.5)" required>
+                </label>
+                <button type="submit">Submit & Analyze</button>
+                <button type="button" id="simBtn" class="btn-sim" onclick="toggleSimulation()" style="background: var(--at-risk); color: var(--at-risk-contrast);">▶ Start Live Simulation</button>
+            </form>
+            <div id="result" class="result"></div>
+        </section>
+
+        <section class="card">
+            <h2>🩺 Live Health &amp; Mission Metrics</h2>
+            <div class="vitals-grid">
+                <article class="vital-card">
+                    <div class="vital-card-top"><span class="vital-card-title">Heart rate</span><span id="hrStatus" class="vital-status">NO DATA</span></div>
+                    <div class="vital-gauge"><canvas id="hrGauge"></canvas></div>
+                </article>
+                <article class="vital-card">
+                    <div class="vital-card-top"><span class="vital-card-title">Blood oxygen</span><span id="spo2Status" class="vital-status">NO DATA</span></div>
+                    <div class="vital-gauge"><canvas id="spo2Gauge"></canvas></div>
+                </article>
+                <article class="vital-card">
+                    <div class="vital-card-top"><span class="vital-card-title">Body temp</span><span id="tempStatus" class="vital-status">NO DATA</span></div>
+                    <div class="vital-gauge"><canvas id="tempGauge"></canvas></div>
+                </article>
+                <article class="vital-card">
+                    <div class="vital-card-top"><span class="vital-card-title">Sleep</span><span id="sleepStatus" class="vital-status">NO DATA</span></div>
+                    <div class="vital-gauge"><canvas id="sleepGauge"></canvas></div>
+                </article>
+                <article class="vital-card">
+                    <div class="vital-card-top"><span class="vital-card-title">Activity</span><span id="activityStatus" class="vital-status">NO DATA</span></div>
+                    <div class="vital-gauge"><canvas id="activityGauge"></canvas></div>
+                </article>
+                <article class="vital-card">
+                    <div class="vital-card-top"><span class="vital-card-title">Cosmic radiation</span><span id="radiationStatus" class="vital-status">NO DATA</span></div>
+                    <div class="vital-gauge"><canvas id="radiationGauge"></canvas></div>
+                </article>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>🔮 AI 24-Hour Health Forecast</h2>
+            <div id="forecastWidget" style="padding: 20px; border-radius: 8px; background: var(--bg-color); border-left: 5px solid #8a9bb0;">
+                <h3 id="forecastStatus" style="margin-bottom: 10px; font-size: 18px; color: var(--text-color);">Analyzing trends...</h3>
+                <p id="forecastMessage" style="color: var(--text-muted); font-size: 14px; line-height: 1.5;">Loading predictive model...</p>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>💡 Latest Recommendation</h2>
+            <div id="recommendation" class="rec">Loading...</div>
+        </section>
+
+        <section class="card">
+            <h2>🚨 Alerts</h2>
+            <ul id="alertsList" class="alerts"></ul>
+        </section>
+
+        <section class="card">
+            <h2>📋 Recent Health History</h2>
+            <table id="historyTable" class="data-table">
+                <thead>
+                    <tr>
+                        <th>Time</th><th>HR</th><th>BP</th><th>SpO2</th>
+                        <th>Temp</th><th>Sleep</th><th>Activity</th><th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </main>
+        </div>
+    </div>
+
+    <div class="chat-widget-btn" onclick="toggleChat()">💬</div>
+
+    <div class="chat-box" id="chatBox">
+        <div class="chat-header">
+            <span>🩺 AstroDoc AI</span>
+            <span style="cursor: pointer;" onclick="toggleChat()">✖</span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="msg ai">Hello! I'm AstroDoc. I have access to your latest vitals. How are you feeling today?</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="Ask about your health..." onkeypress="handleChatEnter(event)">
+            <button onclick="sendChatMessage()">➤</button>
+        </div>
+    </div>
+
+    <div id="lockdownOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 10, 0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; padding: 20px;">
+        <h1 style="color: #e74c3c; font-size: 50px; margin-bottom: 20px; animation: pulse-red 1s infinite;">🚨 EMERGENCY DECLARED</h1>
+        <p style="font-size: 20px; max-width: 600px; line-height: 1.6;">
+            Mission Control has been notified of your emergency. All telemetry and biometric data is now being transmitted live to the flight surgeon.
+        </p>
+        <p style="font-size: 16px; color: #aaa; margin-top: 40px;">
+            Please stay calm and await further instructions. Do not move unless absolutely necessary.
+        </p>
+        <div style="margin-top: 40px; padding: 20px; border: 1px dashed #e74c3c; border-radius: 8px;">
+            <p style="color: #e74c3c; font-weight: bold;">AWAITING MISSION CONTROL OVERRIDE</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js', v=2) }}"></script>
+    
+    <script>
+        async function declareEmergency() {
+            if (!confirm("⚠️ ARE YOU SURE? This will trigger a Priority 1 alert and lock your screen. Mission Control will be notified immediately.")) return;
+
+            try {
+                const res = await fetch('/api/emergency', { method: 'POST' });
+                if (res.ok) {
+                    document.getElementById('lockdownOverlay').style.display = 'flex';
+                } else {
+                    alert("Failed to trigger emergency.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error connecting to server.");
+            }
+        }
+
+        document.getElementById('astronautProfileForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const message = document.getElementById('profileMessage');
+            const button = event.currentTarget.querySelector('button[type="submit"]');
+            button.disabled = true;
+            message.textContent = '';
+
+            try {
+                const response = await fetch('/api/astronaut/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('profileName').value,
+                        age: document.getElementById('profileAge').value,
+                        blood_group: document.getElementById('profileBloodGroup').value
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    message.textContent = result.error || 'Unable to save profile.';
+                    return;
+                }
+                window.location.reload();
+            } catch (error) {
+                message.textContent = 'Could not connect to save your profile. Please try again.';
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        async function checkEmergencyOnLoad() {
+            try {
+                const res = await fetch('/api/emergency/status');
+                const data = await res.json();
+                
+                if (data.emergency) {
+                    document.getElementById('lockdownOverlay').style.display = 'flex';
+                }
+                
+                if (data.status === 'Critical') {
+                    document.getElementById('emergencyButtonContainer').style.display = 'block';
+                } else {
+                    document.getElementById('emergencyButtonContainer').style.display = 'none';
+                }
+            } catch (err) {}
+        }
+        
+        setInterval(checkEmergencyOnLoad, 5000);
+        checkEmergencyOnLoad();
+    </script>
+</body>
+</html>

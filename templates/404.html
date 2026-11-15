@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>404 - Lost in Space | AstroHealth AI</title>
+    <meta name="description" content="The page you are looking for has drifted into deep space.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+</head>
+<body class="auth-body">
+    <div class="auth-card" style="text-align: center;">
+        <h1 style="font-size: 80px; margin-bottom: 10px;">🛸</h1>
+        <h2>404 - Signal Lost</h2>
+        <p style="margin: 20px 0; color: #aaa;">The coordinates you entered do not match any known sectors.</p>
+        <a href="{{ url_for('auth.home_redirect') }}" class="btn" style="display: inline-block; padding: 12px 24px; background: var(--primary); color: var(--primary-contrast); text-decoration: none; border-radius: 8px;">Return to Base</a>
+    </div>
+</body>
+</html>

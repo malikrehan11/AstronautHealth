@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission Control Triage | AstroHealth AI</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
+    
+    <style>
+        .triage-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
+        .triage-column { background: linear-gradient(145deg, var(--card-bg), var(--card-bg-alt)); border-radius: 18px; padding: 18px; border: 1px solid var(--card-border); border-top: 4px solid var(--primary); min-height: 400px; box-shadow: 0 14px 34px rgba(4, 14, 28, 0.18); }
+        #criticalColumn { border-top-color: var(--critical); }
+        #atRiskColumn { border-top-color: var(--at-risk); }
+        .triage-board > .triage-column:nth-child(3) { border-top-color: var(--stable); }
+        .triage-header { text-align: center; font-weight: bold; padding: 11px; border-radius: 9px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; font-size: 14px; }
+        .header-critical { background: var(--critical-soft); color: var(--critical); border: 1px solid var(--critical); }
+        .header-atrisk { background: var(--at-risk-soft); color: var(--at-risk); border: 1px solid var(--at-risk); }
+        .header-stable { background: var(--stable-soft); color: var(--stable); border: 1px solid var(--stable); }
+        .patient-card { background: var(--input-bg); border-radius: 12px; padding: 16px; margin-bottom: 15px; border: 1px solid var(--card-border); border-left: 5px solid var(--card-border); box-shadow: 0 6px 16px rgba(4, 14, 28, 0.16); }
+        .patient-card.critical { border-left-color: var(--critical); animation: pulse-red 1.8s infinite; }
+        .patient-card.atrisk { border-left-color: var(--at-risk); }
+        .patient-card.stable { border-left-color: var(--stable); }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 var(--critical-soft); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+        .patient-name { font-weight: bold; font-size: 16px; margin-bottom: 8px; color: var(--text-color); }
+        .patient-vitals { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; }
+        .btn-resolve { background: var(--stable); color: var(--stable-contrast); border: none; padding: 9px; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: bold; width: 100%; transition: background 0.2s; }
+        .btn-resolve:hover { filter: brightness(0.92); }
+        .btn-pdf { background: var(--primary); color: var(--primary-contrast); border: none; padding: 9px; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: bold; width: 100%; margin-top: 8px; display: block; text-align: center; text-decoration: none; transition: background 0.2s; }
+        .btn-pdf:hover { background: var(--primary-hover); }
+        .chat-widget-btn { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: var(--primary); color: var(--primary-contrast); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; box-shadow: 0 4px 15px var(--primary-soft); z-index: 1000; transition: transform 0.2s; }
+        .chat-widget-btn:hover { transform: scale(1.1); }
+        .chat-box { position: fixed; bottom: 100px; right: 30px; width: 380px; height: 500px; background: linear-gradient(145deg, var(--card-bg), var(--card-bg-alt)); border: 1px solid var(--card-border); border-radius: 18px; display: none; flex-direction: column; z-index: 1000; box-shadow: 0 14px 34px rgba(4,14,28,0.22); overflow: hidden; }
+        .chat-header { background: var(--primary); color: var(--primary-contrast); padding: 15px; font-weight: bold; display: flex; justify-content: space-between; }
+        .chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 10px 14px; border-radius: 12px; font-size: 14px; max-width: 80%; line-height: 1.4; }
+        .msg.user { background: var(--primary); color: var(--primary-contrast); align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg.ai { background: var(--input-bg); color: var(--text-color); align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid var(--card-border); }
+        .chat-input-area { padding: 10px; border-top: 1px solid var(--card-border); display: flex; gap: 10px; }
+        .chat-input-area input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-color); outline: none; }
+        .chat-input-area button { background: var(--primary); color: var(--primary-contrast); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; }
+        @media (max-width: 900px) { .triage-board { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body class="dash-body">
+    <!-- LOSS OF SIGNAL BANNER -->
+    <div id="losBanner" class="los-banner">
+        ⚠️ LOSS OF SIGNAL: Deep Space Communication Blackout. Telemetry data is frozen.
+    </div>
+
+    <div class="dashboard-shell">
+        <aside class="dashboard-sidebar" aria-label="Mission Control navigation">
+            <div class="sidebar-brand">
+                <span class="sidebar-brand-mark" aria-hidden="true">✦</span>
+                <span><strong>ASTROHEALTH</strong><small>FLIGHT SYSTEMS</small></span>
+            </div>
+            <div class="sidebar-section-label">MISSION WORKSPACE</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link active" href="{{ url_for('dashboard.mission_control') }}" aria-current="page">
+                    <span class="sidebar-link-icon" aria-hidden="true">⌂</span> Mission Control
+                </a>
+                <a class="sidebar-link" href="{{ url_for('dashboard.manage_crew') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">♙</span> Manage Crew
+                </a>
+                <a class="sidebar-link" href="{{ url_for('auth.logout') }}">
+                    <span class="sidebar-link-icon" aria-hidden="true">⇥</span> Sign out
+                </a>
+            </nav>
+            <div class="sidebar-session">
+                <div class="sidebar-session-label">✦ &nbsp; MISSION SESSION</div>
+                <div class="sidebar-profile">
+                    <span class="sidebar-avatar" aria-hidden="true">🛰️</span>
+                    <span>{{ name }}<small>MISSION CONTROL</small></span>
+                </div>
+            </div>
+        </aside>
+
+        <div class="dashboard-content">
+    <header class="topbar">
+        <h1>🛰️ Mission Control</h1>
+        <div>
+            <button id="losToggle" class="los-toggle" onclick="toggleLOSAdmin()">📡 Signal: ONLINE</button>
+            <button id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()">🌙</button>
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
+        </div>
+    </header>
+
+    <nav aria-label="breadcrumb" style="padding: 10px 24px; font-size: 14px;">
+        <span>Mission Control</span>
+    </nav>
+
+    <main class="container">
+        <h1 class="visually-hidden">Mission Control Triage Board</h1>
+
+        <div class="triage-board">
+            <!-- CRITICAL COLUMN -->
+            <div class="triage-column" id="criticalColumn">
+                <div class="triage-header header-critical">🚨 Critical (<span id="criticalCount">{{ critical_patients|length }}</span>)</div>
+                <div id="criticalCards">
+                    {% for a in critical_patients %}
+                    <div class="patient-card critical" id="critical-patient-{{ a.id }}">
+                        <div class="patient-name">{{ a.name }}</div>
+                        <div class="patient-vitals">
+                            HR: <b>{{ a.latest.heart_rate }}</b> bpm | SpO2: <b>{{ a.latest.spo2 }}%</b><br>
+                            Temp: {{ a.latest.body_temp }}°C | Rad: {{ a.latest.radiation_mSv }} mSv<br>
+                            BP: {{ a.latest.systolic_bp }}/{{ a.latest.diastolic_bp }}
+                        </div>
+                        <button class="btn-resolve" onclick="resolveEmergency({{ a.id }})">✅ Resolve Emergency</button>
+                        <a href="{{ url_for('dashboard.download_pdf_report', astronaut_id=a.id) }}" class="btn-pdf">📄 Download PDF</a>
+                    </div>
+                    {% else %}
+                    <p id="noCriticalMsg" style="text-align: center; color: var(--text-muted); margin-top: 30px; font-size: 14px;">No critical patients.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- AT RISK COLUMN -->
+            <div class="triage-column" id="atRiskColumn">
+                <div class="triage-header header-atrisk">⚠️ At Risk (<span id="atRiskCount">{{ at_risk_patients|length }}</span>)</div>
+                <div id="atRiskCards">
+                    {% for a in at_risk_patients %}
+                    <div class="patient-card atrisk" id="atrisk-patient-{{ a.id }}">
+                        <div class="patient-name">{{ a.name }}</div>
+                        <div class="patient-vitals">
+                            HR: {{ a.latest.heart_rate }} bpm | SpO2: {{ a.latest.spo2 }}%<br>
+                            Temp: {{ a.latest.body_temp }}°C | Rad: {{ a.latest.radiation_mSv }} mSv
+                        </div>
+                        <a href="{{ url_for('dashboard.download_pdf_report', astronaut_id=a.id) }}" class="btn-pdf">📄 Download PDF</a>
+                        <button class="btn-resolve" style="margin-top: 8px; background: var(--at-risk); color: var(--at-risk-contrast);" onclick="resolveAtRisk({{ a.id }})">🩺 Mark as Stable</button>
+                    </div>
+                    {% else %}
+                    <p id="noAtRiskMsg" style="text-align: center; color: var(--text-muted); margin-top: 30px; font-size: 14px;">No at-risk patients.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- STABLE COLUMN -->
+            <div class="triage-column">
+                <div class="triage-header header-stable">✅ Stable ({{ stable_patients|length }})</div>
+                {% for a in stable_patients %}
+                <div class="patient-card stable">
+                    <div class="patient-name">{{ a.name }}</div>
+                    {% if a.latest %}
+                    <div class="patient-vitals">
+                        HR: {{ a.latest.heart_rate }} bpm | SpO2: {{ a.latest.spo2 }}%<br>
+                        Temp: {{ a.latest.body_temp }}°C | Rad: {{ a.latest.radiation_mSv }} mSv
+                    </div>
+                    {% else %}
+                    <div class="patient-vitals">No vitals recorded yet.</div>
+                    {% endif %}
+                    <a href="{{ url_for('dashboard.download_pdf_report', astronaut_id=a.id) }}" class="btn-pdf">📄 Download PDF</a>
+                </div>
+                {% else %}
+                <p style="text-align: center; color: var(--text-muted); margin-top: 30px; font-size: 14px;">No stable patients.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <section class="card" style="margin-top: 30px;">
+            <h2>📊 Fleet-Wide Health Trends</h2>
+            <div style="position: relative; height: 350px; width: 100%;">
+                <canvas id="fleetChart"></canvas>
+            </div>
+        </section>
+
+        <section class="card" style="margin-top: 30px;">
+            <h2>🚨 Recent Alerts</h2>
+            <ul class="alerts">
+                {% for al in alerts %}
+                    <li class="{{ al.severity }}">
+                        <strong>{{ al.astronaut_name }}</strong> — {{ al.message }}
+                        <small>({{ al.created_at }})</small>
+                    </li>
+                {% else %}
+                    <li>No recent alerts.</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="card" style="margin-top: 30px; border-left: 5px solid var(--critical);">
+            <h2>🧠 AI Post-Incident Analysis</h2>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                {% for inc in incidents %}
+                <div style="background: var(--input-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <strong style="color: var(--critical);">🚨 {{ inc.astronaut_name }} (Emergency Declared)</strong>
+                        <small style="color: var(--text-muted);">{{ inc.created_at }}</small>
+                    </div>
+                    <p style="font-size: 14px; line-height: 1.5; color: var(--text-color); font-style: italic;">
+                        "{{ inc.report_text }}"
+                    </p>
+                </div>
+                {% else %}
+                <p style="color: var(--text-muted);">No incident reports generated yet.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- SYSTEM AUDIT LOGS -->
+        <section class="card" style="margin-top: 30px; border-left: 5px solid var(--primary);">
+            <h2>🛡️ System Audit Logs (Security Feed)</h2>
+            <div style="background: #0d1117; color: #c9d1d9; padding: 15px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; height: 250px; overflow-y: auto; border: 1px solid #30363d;">
+                {% for log in logs %}
+                    <div style="margin-bottom: 8px; border-bottom: 1px solid #21262d; padding-bottom: 4px;">
+                        <span style="color: #8b949e;">[{{ log.created_at }}]</span>
+                        <span style="color: #79c0ff;">{{ log.user_name or 'System' }}</span>:
+                        <span style="color: #d2a8ff;">{{ log.action }}</span>
+                        {% if log.details %}
+                            <span style="color: #a5d6ff;">— {{ log.details }}</span>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <p style="color: #8b949e;">No system activity recorded yet.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+        </div>
+    </div>
+
+    <div class="chat-widget-btn" onclick="toggleChat()">🤖</div>
+
+    <div class="chat-box" id="chatBox">
+        <div class="chat-header">
+            <span>🤖 Command AI Assistant</span>
+            <span style="cursor: pointer;" onclick="toggleChat()">✖</span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="msg ai">Welcome, Commander. I have full access to the fleet's telemetry and incident reports. How can I assist you today?</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="Ask about the crew..." onkeypress="handleChatEnter(event)">
+            <button onclick="sendChatMessage()">➤</button>
+        </div>
+    </div>
+
+    <script>
+        let audioCtx = null;
+        let alarmInterval = null;
+
+        // Theme Logic
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.getElementById('themeToggle').innerText = savedTheme === 'dark' ? '☀️' : '🌙';
+            loadFleetTrends();
+        }
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            document.getElementById('themeToggle').innerText = newTheme === 'dark' ? '☀️' : '🌙';
+            loadFleetTrends();
+        }
+
+        // --- LOSS OF SIGNAL (LOS) ADMIN MODE ---
+        let isLOSActive = false;
+
+        function toggleLOSAdmin() {
+            const banner = document.getElementById('losBanner');
+            const toggleBtn = document.getElementById('losToggle');
+            
+            if (!isLOSActive) {
+                isLOSActive = true;
+                banner.classList.add('active');
+                document.body.classList.add('los-blackout');
+                toggleBtn.classList.add('active');
+                toggleBtn.innerText = "📡 Signal: OFFLINE";
+                stopAmbulanceSiren();
+            } else {
+                isLOSActive = false;
+                banner.classList.remove('active');
+                document.body.classList.remove('los-blackout');
+                toggleBtn.classList.remove('active');
+                toggleBtn.innerText = "📡 Signal: ONLINE";
+                checkForCriticalVoiceAlerts();
+            }
+        }
+
+        // Siren Controls
+        function startAmbulanceSiren() {
+            if (isLOSActive) return; // Do not play siren if offline
+            if (alarmInterval) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            alarmInterval = setInterval(() => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+                gain.gain.setValueAtTime(0.3, now);
+                osc.frequency.setValueAtTime(1200, now);
+                osc.frequency.linearRampToValueAtTime(900, now + 0.4);
+                osc.frequency.setValueAtTime(700, now + 0.4);
+                osc.frequency.linearRampToValueAtTime(500, now + 0.8);
+                osc.start(now);
+                osc.stop(now + 0.8);
+                gain.gain.setValueAtTime(0.3, now + 0.7);
+                gain.gain.linearRampToValueAtTime(0, now + 0.8);
+            }, 1000);
+        }
+
+        function stopAmbulanceSiren() {
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+        }
+
+        // Resolve CRITICAL
+        async function resolveEmergency(astronautId) {
+            if (!confirm("Are you sure this emergency is resolved? This will update the astronaut's status.")) return;
+            stopAmbulanceSiren();
+            try {
+                const res = await fetch(`/api/resolve_alert/${astronautId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                if (res.ok) {
+                    const card = document.getElementById(`critical-patient-${astronautId}`);
+                    if (card) card.remove();
+                    const countEl = document.getElementById('criticalCount');
+                    if (countEl) {
+                        let count = parseInt(countEl.innerText);
+                        count = Math.max(0, count - 1);
+                        countEl.innerText = count;
+                        if (count === 0) {
+                            const noMsg = document.getElementById('noCriticalMsg');
+                            if (!noMsg) {
+                                const p = document.createElement('p');
+                                p.id = 'noCriticalMsg';
+                                p.style = "text-align: center; color: var(--text-muted); margin-top: 30px; font-size: 14px;";
+                                p.innerText = "No critical patients.";
+                                document.getElementById('criticalCards').appendChild(p);
+                            }
+                            sessionStorage.removeItem('lastAlertName');
+                        }
+                    }
+                } else {
+                    alert("Failed to resolve emergency.");
+                    startAmbulanceSiren();
+                }
+            } catch (err) { console.error(err); alert("Error."); startAmbulanceSiren(); }
+        }
+
+        // Resolve AT RISK
+        async function resolveAtRisk(astronautId) {
+            if (!confirm("Are you sure you want to mark this astronaut as Stable? This will update their status.")) return;
+            try {
+                const res = await fetch(`/api/resolve_alert/${astronautId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                if (res.ok) {
+                    const card = document.getElementById(`atrisk-patient-${astronautId}`);
+                    if (card) card.remove();
+                    const countEl = document.getElementById('atRiskCount');
+                    if (countEl) {
+                        let count = parseInt(countEl.innerText);
+                        count = Math.max(0, count - 1);
+                        countEl.innerText = count;
+                        if (count === 0) {
+                            const noMsg = document.getElementById('noAtRiskMsg');
+                            if (!noMsg) {
+                                const p = document.createElement('p');
+                                p.id = 'noAtRiskMsg';
+                                p.style = "text-align: center; color: var(--text-muted); margin-top: 30px; font-size: 14px;";
+                                p.innerText = "No at-risk patients.";
+                                document.getElementById('atRiskCards').appendChild(p);
+                            }
+                        }
+                    }
+                } else {
+                    alert("Failed to update status.");
+                }
+            } catch (err) { console.error(err); alert("Error."); }
+        }
+
+        // Chatbot
+        const chatHistory = [];
+        function toggleChat() { const box = document.getElementById('chatBox'); box.style.display = box.style.display === 'flex' ? 'none' : 'flex'; }
+        function handleChatEnter(e) { if (e.key === 'Enter') sendChatMessage(); }
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            addMessage(message, 'user');
+            input.value = '';
+            const typingId = 'typing-' + Date.now();
+            const msgContainer = document.getElementById('chatMessages');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'msg ai';
+            typingDiv.id = typingId;
+            typingDiv.innerText = 'Analyzing fleet data...';
+            msgContainer.appendChild(typingDiv);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+            try {
+                const res = await fetch('/api/admin_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: message, history: chatHistory.slice(-10) }) });
+                const data = await res.json();
+                const typingEl = document.getElementById(typingId);
+                if (typingEl) typingEl.remove();
+                if (!res.ok) addMessage(data.error || 'Command AI is temporarily unavailable. Please try again.', 'ai');
+                else if (data.reply) {
+                    addMessage(data.reply, 'ai');
+                    chatHistory.push(
+                        { role: 'user', content: message },
+                        { role: 'assistant', content: data.reply }
+                    );
+                }
+                else addMessage("Sorry, I couldn't process that.", 'ai');
+            } catch (err) {
+                const typingEl = document.getElementById(typingId);
+                if (typingEl) typingEl.remove();
+                addMessage("Error connecting to AI.", 'ai');
+            }
+        }
+        function addMessage(text, sender) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerText = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Fleet Trends
+        let fleetChart = null;
+        async function loadFleetTrends() {
+            try {
+                const res = await fetch('/api/mission/fleet_trends');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (fleetChart) fleetChart.destroy();
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+                const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                const colors = {
+                    critical: getComputedStyle(document.documentElement).getPropertyValue('--critical').trim(),
+                    stable: getComputedStyle(document.documentElement).getPropertyValue('--stable').trim(),
+                    atRisk: getComputedStyle(document.documentElement).getPropertyValue('--at-risk').trim()
+                };
+                const ctx = document.getElementById('fleetChart').getContext('2d');
+                fleetChart = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: data.labels, datasets: [
+                        { label: 'Avg HR', data: data.hr_data, borderColor: colors.critical, backgroundColor: 'rgba(248, 113, 113, 0.1)', tension: 0.3, yAxisID: 'y' },
+                        { label: 'Avg SpO2', data: data.spo2_data, borderColor: colors.stable, backgroundColor: 'rgba(52, 211, 153, 0.1)', tension: 0.3, yAxisID: 'y1' },
+                        { label: 'Avg Rad', data: data.rad_data, borderColor: colors.atRisk, backgroundColor: 'rgba(251, 191, 36, 0.1)', tension: 0.3, yAxisID: 'y2' }
+                    ]},
+                    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        scales: { x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                            y: { type: 'linear', display: true, position: 'left', ticks: { color: colors.critical }, grid: { color: gridColor } },
+                            y1: { type: 'linear', display: true, position: 'right', ticks: { color: colors.stable }, grid: { drawOnChartArea: false } },
+                            y2: { type: 'linear', display: true, position: 'right', ticks: { color: colors.atRisk }, grid: { drawOnChartArea: false } }
+                        }, plugins: { legend: { labels: { color: textColor } } } }
+                });
+            } catch (err) { console.error("Chart error:", err); }
+        }
+
+        // Alerts
+        function checkForCriticalVoiceAlerts() {
+            const criticalCards = document.querySelectorAll('.patient-card.critical');
+            if (criticalCards.length > 0) {
+                const patientName = criticalCards[0].querySelector('.patient-name').innerText;
+                if (sessionStorage.getItem('lastAlertName') !== patientName) {
+                    sessionStorage.setItem('lastAlertName', patientName);
+                    speakAlert(patientName);
+                }
+                startAmbulanceSiren();
+            } else {
+                stopAmbulanceSiren();
+                sessionStorage.removeItem('lastAlertName');
+            }
+        }
+        function speakAlert(name) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const message = new SpeechSynthesisUtterance();
+                message.text = `Warning. Astronaut ${name} has entered a critical state. Immediate medical attention required.`;
+                message.rate = 0.9; message.pitch = 0.8;
+                window.speechSynthesis.speak(message);
+            }
+        }
+
+        initTheme();
+        loadFleetTrends();
+        window.addEventListener('load', checkForCriticalVoiceAlerts);
+    </script>
+</body>
+</html>

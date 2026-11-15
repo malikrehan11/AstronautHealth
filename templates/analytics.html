@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Analytics | AstroHealth AI</title>
+    <meta name="description" content="Historical health trend analysis for astronauts.">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=4) }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
+</head>
+<body class="dash-body">
+    <header class="topbar">
+        <h1>🚀 AstroHealth AI — Analytics</h1>
+        <div>
+            <button id="themeToggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌙</button>
+            <span>👨‍🚀 {{ name }}</span> | 
+            <a href="{{ url_for('auth.logout') }}">Logout</a>
+        </div>
+    </header>
+
+    <!-- Breadcrumbs -->
+    <nav aria-label="breadcrumb" style="padding: 10px 24px; font-size: 14px;">
+        <a href="/home" style="text-decoration: none;">Home</a> 
+        &rsaquo; 
+        <a href="{{ url_for('dashboard.astronaut_dashboard') }}" style="text-decoration: none;">Dashboard</a>
+        &rsaquo; 
+        <span>Analytics</span>
+    </nav>
+
+    <main class="container">
+        <h1 class="visually-hidden">Astronaut Health Analytics</h1>
+
+        <!-- Line Chart Section -->
+        <section class="card">
+            <h2>📈 Heart Rate History Trend</h2>
+            <div style="position: relative; height: 400px; width: 100%;">
+                <canvas id="hrLineChart"></canvas>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>📋 All History Data</h2>
+            <table id="analyticsTable" class="data-table">
+                <thead>
+                    <tr>
+                        <th>Time</th><th>HR</th><th>BP</th><th>SpO2</th>
+                        <th>Temp</th><th>Sleep</th><th>Activity</th><th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </main>
+
+    <script>
+        // ==========================================
+        // 1. Dark Mode Logic
+        // ==========================================
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.getElementById('themeToggle').innerText = savedTheme === 'dark' ? '☀️' : '🌙';
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            document.getElementById('themeToggle').innerText = newTheme === 'dark' ? '☀️' : '🌙';
+            // Redraw chart with new theme colors
+            loadAnalytics();
+        }
+
+        initTheme();
+
+        // ==========================================
+        // 2. Fetch Data & Draw Line Chart
+        // ==========================================
+        let hrChart = null;
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/health/history');
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                const rows = await res.json();
+
+                // Populate Table
+                const tbody = document.querySelector('#analyticsTable tbody');
+                tbody.innerHTML = '';
+                rows.forEach(r => {
+                    const tr = document.createElement('tr');
+                    const cls = r.risk_status.toLowerCase().replace(' ', '-');
+                    tr.innerHTML = `
+                        <td>${r.recorded_at}</td>
+                        <td>${r.heart_rate}</td>
+                        <td>${r.systolic_bp}/${r.diastolic_bp}</td>
+                        <td>${r.spo2}%</td>
+                        <td>${r.body_temp}</td>
+                        <td>${r.sleep_hours}</td>
+                        <td>${r.activity_minutes}</td>
+                        <td><span class="badge ${cls}">${r.risk_status}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Prepare Chart Data (Sort oldest to newest)
+                const sorted = [...rows].reverse();
+                const labels = sorted.map(r => r.recorded_at.slice(11, 19));
+                const data = sorted.map(r => r.heart_rate);
+
+                // Theme Colors for Chart
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+                const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+
+                // Draw Chart
+                if (hrChart) hrChart.destroy();
+                const ctx = document.getElementById('hrLineChart').getContext('2d');
+                
+                hrChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Heart Rate (bpm)',
+                            data: data,
+                            borderColor: primaryColor,
+                            backgroundColor: isDark ? 'rgba(45, 212, 191, 0.14)' : 'rgba(15, 118, 110, 0.12)',
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 3,
+                        }]
+                    },
+                    options: { 
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { 
+                            x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                            y: { beginAtZero: false, ticks: { color: textColor }, grid: { color: gridColor } } 
+                        },
+                        plugins: { legend: { labels: { color: textColor } } }
+                    }
+                });
+            } catch (err) {
+                console.error("Error loading analytics", err);
+            }
+        }
+
+        loadAnalytics();
+    </script>
+</body>
+</html>
