@@ -30,3 +30,29 @@ To run this project locally, follow these steps:
 ```bash
 git clone https://github.com/malikrehan11/AstronautHealth.git
 cd AstronautHealth
+
+## 📸 Screenshots
+
+### 🚀 Astronaut Dashboard Views
+<table>
+  <tr>
+    <td><img src="screenshots/Dashboard1.png" width="400"/></td>
+    <td><img src="screenshots/Dashboard2.png" width="400"/></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Dashboard3.png" width="400"/></td>
+    <td><img src="screenshots/Dashboard4.png" width="400"/></td>
+  </tr>
+</table>
+
+### 🛰️ Mission Control Dashboard (Triage Board)
+<table>
+  <tr>
+    <td><img src="screenshots/Mission-Control1.png" width="280"/></td>
+    <td><img src="screenshots/Mission-Control2.png" width="280"/></td>
+    <td><img src="screenshots/Mission-Control3.png" width="280"/></td>
+  </tr>
+</table>
+
+### 🤖 AI Chatbot (AstroDoc)
+<img src="screenshots/Chatbot.png" width="800"/>
