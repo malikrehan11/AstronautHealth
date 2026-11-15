@@ -46,7 +46,7 @@ def sitemap():
 
 @app.route('/llms.txt')
 def llms_txt():
-    content = """# AstroHealth AI
+    content = """# CureAstron
 > Intelligent, real-time health monitoring system for astronauts during deep space missions.
 
 ## Core Features
